@@ -1,7 +1,7 @@
 # full-stack-open-project
 Tracker for the Full Stack Open Course (https://fullstackopen.com/en/)
 
-- [ ] Part 0: Fundamentals of Web apps [00:00:21]
+- [ ] Part 0: Fundamentals of Web apps [00:26:05]
 - [ ] Part 1: Introduction to React [00:00:00]
 - [ ] Part 2: Communicating with server [00:00:00]
 - [ ] Part 3: Programming a server with NodeJS and Express [00:00:00]
