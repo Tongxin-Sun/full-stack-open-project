@@ -41,30 +41,51 @@ def update_md(log):
         lines = f.readlines()
 
     new_lines = []
-    part_line_pattern = re.compile(
-        r"^- \[ \] Part (\d+):(.+?)( \[\d{2}:\d{2}:\d{2}\])?$"
-    )
+    current_part = None
+    part_total_times = {}
+
+    # First pass: calculate all subpart times and total part times
+    for key, entries in log.items():
+        total = sum((entry["end"] - entry["start"] for entry in entries), 0)
+        h, m = divmod(int(total), 60)
+        s = m % 60
+        part, sub = key[:-1], key[-1] if not key[-1].isdigit() else None
+        if sub:
+            part_total_times.setdefault(part, {})[sub] = datetime.timedelta(
+                seconds=total
+            )
+        else:
+            part_total_times.setdefault(key, {})
+
+    # Second pass: update README.md lines
+    part_pattern = re.compile(r"^- \[ \] Part (\d+):(.+?)( \[\d{2}:\d{2}:\d{2}\])?$")
+    subpart_pattern = re.compile(r"^\s+- ([a-z])\. (.+?) \[\d{2}:\d{2}:\d{2}\]$")
 
     for line in lines:
-        match = part_line_pattern.match(line)
-        if match:
-            part_number = match.group(1)
-            part_title = match.group(2).strip()
+        part_match = part_pattern.match(line)
+        subpart_match = subpart_pattern.match(line)
 
+        if part_match:
+            current_part = part_match.group(1)
+            title = part_match.group(2).strip()
             total = sum(
-                (
-                    datetime.timedelta(seconds=(entry["end"] - entry["start"]))
-                    for entry in log.get(part_number, [])
-                ),
-                datetime.timedelta(0),
+                part_total_times.get(current_part, {}).values(), datetime.timedelta()
             )
-            time_str = format_timedelta(total)
-
-            # Rebuild the line with the updated time
-            new_line = f"- [ ] Part {part_number}: {part_title} [{time_str}]\n"
+            new_line = (
+                f"- [ ] Part {current_part}: {title} [{format_timedelta(total)}]\n"
+            )
             new_lines.append(new_line)
+        elif subpart_match and current_part:
+            sub = subpart_match.group(1)
+            subtitle = subpart_match.group(2)
+            duration = part_total_times.get(current_part, {}).get(
+                sub, datetime.timedelta()
+            )
+            new_lines.append(
+                f"    - {sub}. {subtitle} [{format_timedelta(duration)}]\n"
+            )
         else:
-            new_lines.append(line)  # Leave lines unchanged if they don't match
+            new_lines.append(line)
 
     with open(MD_FILE, "w") as f:
         f.writelines(new_lines)
@@ -74,9 +95,9 @@ def main():
     print("📘 Full Stack Open Time Tracker")
     log = load_log()
 
-    part = input("👉 Which part are you working on? (e.g., 0 for Part 0): ").strip()
-    if not part.isdigit():
-        print("❌ Invalid part number.")
+    part = input("👉 Which part are you working on? (e.g., 0a, 1b): ").strip().lower()
+    if not re.match(r"^\d+[a-z]?$", part):
+        print("❌ Invalid part or subpart format.")
         return
 
     print("⌛ Type 'start' to begin timing...")
@@ -93,9 +114,9 @@ def main():
     elapsed = end_time - start_time
     duration_str = format_timedelta(datetime.timedelta(seconds=elapsed))
 
-    # Save to log
     if part not in log:
         log[part] = []
+
     log[part].append(
         {
             "start": int(start_time),
